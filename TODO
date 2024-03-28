@@ -1,0 +1,21 @@
+...
+//I just found this:
+//https://github.com/itay-grudev/SingleApplication
+...
+
+IDEA define scope, e.g., X session :0
+so if ... mepmepmep...
+
+QApplicationLock as wrapper around ApplicationLock
+ApplicationLock name macro
+
+boost
+https://www.boost.org/doc/libs/1_54_0/doc/html/interprocess/sharedmemorybetweenprocesses.html
+
+offer additional alternative... real file in tmpfs?
+then simply update timestamp!
+
+
+
+
+
