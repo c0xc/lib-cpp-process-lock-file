@@ -4,6 +4,25 @@ lib-cpp-process-lock-file
 This is not a program but a C++ module.
 It's meant to be included as a submodule, then symlinked.
 
+This module provides an easy way to restrict the application
+to a single instance.
+If a second instance is started, the first instance will be activated,
+preventing multiple instances being started accidentally.
+
+
+
+Usage
+---
+
+To include this module directly into the source,
+simply add it as a submodule:
+
+    $ git submodule add https://github.com/c0xc/lib-cpp-process-lock-file.git
+    $ ln -s lib-cpp-process-lock-file/qapp-process-lock.hpp inc/
+    $ ln -s lib-cpp-process-lock-file/qapp-process-lock.cpp src/
+
+
+
 Module
 ---
 
