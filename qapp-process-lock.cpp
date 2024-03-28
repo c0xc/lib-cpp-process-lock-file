@@ -7,22 +7,22 @@ QApplicationLock::timestamp()
     return current_time;
 }
 
-QApplicationLock::QApplicationLock(QObject *parent)
+QApplicationLock::QApplicationLock(const QString &name, QObject *parent)
                 : QObject(parent),
                   m_secondary(false),
                   m_init_fail(0)
 {
-    m_name = "REPLACE NAME";
-    // applicationName()
+    m_name = name; //"REPLACE NAME"
+    if (m_name.isEmpty())
+    {
+        QCoreApplication *app = QCoreApplication::instance();
+        if (app)
+            m_name = app->applicationName();
+    }
 
-    //m_tmr_check = new QTimer(this);
     m_tmr_check.setInterval(1000);
     connect(&m_tmr_check, SIGNAL(timeout()), SLOT(updateLock()));
 }
-
-//TODO wrapper around ApplicationLock class ...
-//TODO initQLock...
-
 
 bool
 QApplicationLock::initLock()
@@ -98,7 +98,7 @@ QApplicationLock::initLock()
             //dont_touch_config = true; //was that a good idea?
 
             //Terminate
-            //if (qapp_ptr) close ...
+            //if (qapp_ptr) QApplication::closeAllWindows() ...
             return false;
         }
     }

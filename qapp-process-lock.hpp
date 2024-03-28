@@ -69,7 +69,7 @@ public:
     static qint64
     timestamp();
 
-    QApplicationLock(QObject *parent = 0);
+    QApplicationLock(const QString &name = "", QObject *parent = 0);
 
     bool
     initLock();
