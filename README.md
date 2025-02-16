@@ -44,7 +44,8 @@ a shared memory segment is used for locking.
 In user mode, a temporary file is used for locking.
 A third mode using a local socket might be considered in the future.
 
-The initial Qt version is actually based on code I wrote 2015 for Wallphiller.
+The initial Qt version is actually based on code I wrote in 2015
+for the Wallphiller program (0072ee79).
 
 
 
@@ -71,10 +72,24 @@ so that it lives as long as the application.
 
 isSecondaryInstance() will implicitly try to initialize the lock
 and if that fails because there's already an active lock, it returns true.
+In user scope (new default), this would happen if the same user
+already had another instance of this program running.
+Instances of other users would be ignored.
+Use global scope to ensure that only one user can have the program running
+at any given time, and any attempts by other users to run it again will fail.
 
 To use global mode (shared memory), initialize the lock like this:
 
     QApplicationLock lock("UNIQUE_APPLICATION_NAME", QApplicationLock::Scope::Global);
+
+If you want to allow multiple instances per user, but only one per X session,
+set the X11 scope:
+
+    QApplicationLock lock("UNIQUE_APPLICATION_NAME", QApplicationLock::Scope::User | QApplicationLock::Scope::X11);
+
+The X11 scope can be used to allow only one instance in the local display
+session :0, another one in a remote XPRA session :10 etc.
+If the display id is not available, it will fall back to user scope.
 
 
 

@@ -102,11 +102,19 @@ QApplicationLock::getSessionId()
     //These are Linux/X variables
     //because this scope functionality is intended for Linux X sessions
 
+    //https://www.freedesktop.org/software/systemd/man/latest/pam_systemd.html#Environment
     sid = QProcessEnvironment::systemEnvironment().value("XDG_SESSION_ID");
 
+    //This is actually the important identifier
+    //to distinguish between multiple X sessions of one user
+    //e.g., a local session on :0, an XPRA session on :10, an RDP session...
     QString display_id = QProcessEnvironment::systemEnvironment().value("DISPLAY");
+    if (!display_id.isEmpty())
+    {
+        sid = QString("DISPLAY=%1").arg(display_id);
+    }
 
-    return "";
+    return sid;
 }
 
 QApplicationLock::QApplicationLock(const QString &name, Scope scope, QObject *parent)
@@ -134,7 +142,7 @@ QApplicationLock::QApplicationLock(const QString &name, Scope scope, QObject *pa
 
     //Determine scope and lock mode, prepare lock (lock won't be activated yet)
     m_scope = (int)scope;
-    if (scope == Scope::Undefined || scope == Scope::Global) m_use_shmem = true;
+    if (scope == Scope::Undefined || (int)scope & (int)Scope::Global) m_use_shmem = true;
     else m_use_file = true;
     if (m_use_file) initFileName();
     if (m_use_shmem) initShmemName();
