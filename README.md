@@ -28,7 +28,7 @@ Module
 
 This module provides an easy way to restrict the application
 to a single instance.
-If a second instance is started, the first instance will be activated,
+If a second instance is started, the first instance will be requested,
 preventing multiple instances being started accidentally.
 
 Some alternative solutions exist but most of them are either complicated,
@@ -38,10 +38,50 @@ so the program can't remove the lock.
 The Qt version of this module has been developed for Qt 5
 and can be used by instantiating its class.
 
-We may or may not add the other implementation of this module,
-which does not depend on Qt, to this repository later.
+There are multiple scopes.
+In global mode, which is the original implementation,
+a shared memory segment is used for locking.
+In user mode, a temporary file is used for locking.
+A third mode using a local socket might be considered in the future.
 
 The initial Qt version is actually based on code I wrote 2015 for Wallphiller.
+
+
+
+Usage
+---
+
+Add this to your main() function (or wherever you initially create the
+the QApplication object):
+
+    QApplication app(argc, argv);
+
+    // >>>
+    QApplicationLock lock("UNIQUE_APPLICATION_NAME");
+    if (lock.isSecondaryInstance())
+        return 0;
+    // <<<
+
+    MainWindow *gui = new MainWindow;
+    gui->show();
+    app.exec();
+
+The lock object should be in the same scope as the application object,
+so that it lives as long as the application.
+
+isSecondaryInstance() will implicitly try to initialize the lock
+and if that fails because there's already an active lock, it returns true.
+
+To use global mode (shared memory), initialize the lock like this:
+
+    QApplicationLock lock("UNIQUE_APPLICATION_NAME", QApplicationLock::Scope::Global);
+
+
+
+Author
+------
+
+Philip Seeger (philip@c0xc.net)
 
 
 
