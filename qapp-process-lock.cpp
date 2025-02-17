@@ -71,10 +71,9 @@ QApplicationLock::setFileTime(const QString &file_path, qint64 new_ts, qint64 ne
 }
 
 QString
-QApplicationLock::getUsername(QString *user_id_str_ptr)
+QApplicationLock::getUsername()
 {
     QString username;
-    QString uid_str; //string because it may be more than a numeric uid
 
 #if defined(Q_OS_UNIX) //Linux, standard OS
 
@@ -82,8 +81,7 @@ QApplicationLock::getUsername(QString *user_id_str_ptr)
     username = QString(getlogin());
 
     //Get uid
-    uid_t uid = geteuid();
-    uid_str = QString::number(uid);
+    uid_t uid = geteuid(); //unused
 
 #elif defined(Q_OS_WIN) //Windows
 
@@ -100,34 +98,11 @@ QApplicationLock::getUsername(QString *user_id_str_ptr)
         //Error
     }
 
-    //Get uid (string)
-    HANDLE win_proc_token;
-    if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &win_proc_token))
-    {
-        DWORD size = 0;
-        GetTokenInformation(win_proc_token, TokenUser, 0, 0, &size);
-        if (GetLastError() == ERROR_INSUFFICIENT_BUFFER)
-        {
-            PTOKEN_USER token_user = (PTOKEN_USER)malloc(size);
-            if (GetTokenInformation(win_proc_token, TokenUser, token_user, size, &size))
-            {
-                wchar_t *sid_wchars = 0;
-                if (ConvertSidToStringSidW(token_user->User.Sid, &sid_wchars))
-                {
-                    uid_str = QString::fromWCharArray(sid_wchars);
-                    LocalFree(sid_wchars);
-                }
-            }
-            free(token_user);
-        }
-        CloseHandle(win_proc_token);
-    }
-
 #endif //! OS switch
 
     //NOTE for very long username, the uid might be better suited to keep < 256
+    //see 6c33033
 
-    if (user_id_str_ptr) *user_id_str_ptr = uid_str;
     return username;
 }
 

@@ -20,7 +20,7 @@
 
 #include <QtGlobal> //Q_OS_...
 
-#if !defined(Q_OS_WIN) //system-dependent headers
+#if !defined(Q_OS_WIN) //OS switch: system-dependent headers
 
 #include <unistd.h> //geteuid()
 #include <utime.h>
@@ -30,9 +30,8 @@
 
 #include <windows.h>
 #include <wtsapi32.h> //WTSGetActiveConsoleSessionId()
-#include <sddl.h> //ConvertSidToStringSid()
 
-#endif
+#endif //! OS switch
 
 #include <QDebug>
 #include <QGuiApplication>
@@ -110,7 +109,7 @@ public:
     setFileTime(const QString &file_path, qint64 new_ts, qint64 new_ts_ms = 0);
 
     static QString
-    getUsername(QString *user_id_str_ptr = 0);
+    getUsername();
 
     /**
      * Try to get identifier for desktop session.
