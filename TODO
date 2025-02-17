@@ -15,7 +15,14 @@ https://www.boost.org/doc/libs/1_54_0/doc/html/interprocess/sharedmemorybetweenp
 offer additional alternative... real file in tmpfs?
 then simply update timestamp!
 
+---
 
+timestamp detection seems broken on windows, it keeps re-reading the lock file
+
+---
+
+submodule alternative: library! but both shared and static, avoid .so file as new dependency...
+other devs should pick best solution!
 
 
 

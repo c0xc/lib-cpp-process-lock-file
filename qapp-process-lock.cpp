@@ -35,6 +35,8 @@ QApplicationLock::setFileTime(const QString &file_path, qint64 new_ts, qint64 ne
 
 #else
 
+#if !defined(Q_OS_WIN) //Linux-only code for Qt < 5.10
+
     /*
       The utimes() system call is similar, but the times argument refers
       to an array rather than a structure.  The elements of this array
@@ -63,33 +65,69 @@ QApplicationLock::setFileTime(const QString &file_path, qint64 new_ts, qint64 ne
 
 #endif
 
+#endif
+
     return ok;
 }
 
 QString
-QApplicationLock::getUsername()
+QApplicationLock::getUsername(QString *user_id_str_ptr)
 {
     QString username;
+    QString uid_str; //string because it may be more than a numeric uid
 
-#if defined(Q_OS_UNIX)
+#if defined(Q_OS_UNIX) //Linux, standard OS
 
-    uid_t uid = geteuid();
-
+    //Get username
     username = QString(getlogin());
 
-#elif defined(Q_OS_WIN)
+    //Get uid
+    uid_t uid = geteuid();
+    uid_str = QString::number(uid);
 
-    //??
-    char username_c[MAX_USERNAME];
-    DWORD username_int = sizeof(username_c);
-    if (!GetUserName(username_c, &username_int))
+#elif defined(Q_OS_WIN) //Windows
+
+    //Get username
+    int max = 256;
+    wchar_t uname_wchar[max + 1];
+    DWORD uname_size = sizeof(uname_wchar) / sizeof(uname_wchar[0]);
+    if (GetUserNameW(uname_wchar, &uname_size))
     {
-        throw ...
+        username = QString::fromWCharArray(uname_wchar);
     }
-    username = QString(username_c());
+    else
+    {
+        //Error
+    }
 
-#endif
+    //Get uid (string)
+    HANDLE win_proc_token;
+    if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &win_proc_token))
+    {
+        DWORD size = 0;
+        GetTokenInformation(win_proc_token, TokenUser, 0, 0, &size);
+        if (GetLastError() == ERROR_INSUFFICIENT_BUFFER)
+        {
+            PTOKEN_USER token_user = (PTOKEN_USER)malloc(size);
+            if (GetTokenInformation(win_proc_token, TokenUser, token_user, size, &size))
+            {
+                wchar_t *sid_wchars = 0;
+                if (ConvertSidToStringSidW(token_user->User.Sid, &sid_wchars))
+                {
+                    uid_str = QString::fromWCharArray(sid_wchars);
+                    LocalFree(sid_wchars);
+                }
+            }
+            free(token_user);
+        }
+        CloseHandle(win_proc_token);
+    }
 
+#endif //! OS switch
+
+    //NOTE for very long username, the uid might be better suited to keep < 256
+
+    if (user_id_str_ptr) *user_id_str_ptr = uid_str;
     return username;
 }
 
@@ -98,14 +136,19 @@ QApplicationLock::getSessionId()
 {
     QString sid;
 
-    //TODO os switch?
-    //These are Linux/X variables
-    //because this scope functionality is intended for Linux X sessions
+    //Get DISPLAY id to identify an X11 session
 
-    //https://www.freedesktop.org/software/systemd/man/latest/pam_systemd.html#Environment
+#if defined(Q_OS_UNIX) //Linux, X11 environments
+
+    /*
+     * XDG_SESSION_ID could be used to identify a session, even in SSH sessions
+     * Though we want to identify desktop sessions.
+     *
+     * https://www.freedesktop.org/software/systemd/man/latest/pam_systemd.html#Environment
+     */
     sid = QProcessEnvironment::systemEnvironment().value("XDG_SESSION_ID");
 
-    //This is actually the important identifier
+    //This is actually the relevant identifier
     //to distinguish between multiple X sessions of one user
     //e.g., a local session on :0, an XPRA session on :10, an RDP session...
     QString display_id = QProcessEnvironment::systemEnvironment().value("DISPLAY");
@@ -113,6 +156,13 @@ QApplicationLock::getSessionId()
     {
         sid = QString("DISPLAY=%1").arg(display_id);
     }
+
+#elif defined(Q_OS_WIN) //Windows
+
+    //The Internet says...
+    sid = QString("%1").arg(WTSGetActiveConsoleSessionId());
+
+#endif
 
     return sid;
 }
@@ -395,16 +445,39 @@ QApplicationLock::isProcessGone(const Segment &segment)
     //This is not always possible
     //We're checking the process itself in user mode (other user => no perms)
 
+    //true if process gone, false in doubt
     if (m_scope & (int)Scope::User)
     {
+        QAPP_PROCESS_LOCK_QDEBUG << "trying to check if process is gone" << segment.pid;
+
+#if defined(Q_OS_UNIX) //Linux
+
         //In user mode, a 0 signal to the primary process is used
         //to determine if it's still running
         //(ignoring another process with the same pid)
         if (kill(segment.pid, 0) != 0)
         {
+            QAPP_PROCESS_LOCK_QDEBUG << "pid is gone" << segment.pid;
             //No such process anymore
             return true;
         }
+
+#elif defined(Q_OS_WIN) //Windows
+
+        HANDLE win_proc = OpenProcess(SYNCHRONIZE, FALSE, segment.pid);
+        if (!win_proc)
+        {
+            return true;
+        }
+        else
+        {
+            DWORD ret = WaitForSingleObject(win_proc, 0);
+            CloseHandle(win_proc);
+            if (ret != WAIT_TIMEOUT)
+                return true;
+        }
+
+#endif
 
         //The primary process is running (or, in case of an error, another one)
         //Ideally use another identifier like the process name to double-check
@@ -530,9 +603,12 @@ QApplicationLock::createLock(const Segment &segment)
     }
     else if (m_use_file)
     {
+        QAPP_PROCESS_LOCK_QDEBUG << "creating lock file" << m_lock_file.fileName();
         //Create, open lock file for writing
         if (m_lock_file.isOpen()) m_lock_file.close();
         ok = m_lock_file.open(QFile::ReadWrite);
+        if (!ok)
+            QAPP_PROCESS_LOCK_QDEBUG << "failed to create lock file" << m_lock_file.fileName();
     }
 
     ok = ok && writeLock(segment);
@@ -670,9 +746,20 @@ QApplicationLock::writeFile(const QByteArray &bytes)
 
     //Write via temp file and replace lock file (atomic)
     QSaveFile save_file(m_lock_file.fileName());
-    save_file.open(QIODevice::WriteOnly);
+    bool open_ok = save_file.open(QIODevice::WriteOnly);
     write_ok = save_file.write(bytes) == bytes.size();
-    write_ok = write_ok && save_file.commit();
+    if (m_lock_file.isOpen()) m_lock_file.close(); //for some platforms (commit)...
+    bool save_ok = save_file.commit();
+    const int repeat_delays[] = {1, 100, 200};
+    //improve error handling in case other process has file open right now
+    for (int delay : repeat_delays)
+    {
+        if (!write_ok || save_ok) break; //repeat only if initial commit failed
+        QThread::msleep(delay);
+        save_ok = save_file.commit();
+        if (save_ok) break;
+    }
+    write_ok = write_ok && save_ok;
 
     //Write directly into lock file (not very atomic)
     if (0 /* not atomic */)

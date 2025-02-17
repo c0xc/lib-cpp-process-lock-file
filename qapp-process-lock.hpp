@@ -15,11 +15,24 @@
 
 #include <cassert>
 #include <stdexcept>
-//TODO os switch:
-#include <unistd.h> //geteuid()
 #include <sys/types.h>
-#include <utime.h>
 #include <signal.h>
+
+#include <QtGlobal> //Q_OS_...
+
+#if !defined(Q_OS_WIN) //system-dependent headers
+
+#include <unistd.h> //geteuid()
+#include <utime.h>
+
+#elif defined(Q_OS_WIN)
+//Windows
+
+#include <windows.h>
+#include <wtsapi32.h> //WTSGetActiveConsoleSessionId()
+#include <sddl.h> //ConvertSidToStringSid()
+
+#endif
 
 #include <QDebug>
 #include <QGuiApplication>
@@ -97,8 +110,13 @@ public:
     setFileTime(const QString &file_path, qint64 new_ts, qint64 new_ts_ms = 0);
 
     static QString
-    getUsername();
+    getUsername(QString *user_id_str_ptr = 0);
 
+    /**
+     * Try to get identifier for desktop session.
+     * This identifier can be used to distinguish a local desktop session
+     * from a remote RDP session.
+     */
     static QString
     getSessionId();
 
